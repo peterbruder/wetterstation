@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import chardet
+from io import BytesIO
 
 # Funktion zur Erkennung der Dateikodierung
 def detect_encoding(file):
@@ -18,8 +19,38 @@ def clean_column_names(columns):
         clean_columns.append(col)
     return clean_columns
 
+# Funktion zur Konvertierung und Anpassung der Datentypen
+def convert_to_german_format(df):
+    # Konvertiere die Zeitspalte in ein Datumsformat
+    df['Zeit'] = pd.to_datetime(df['Zeit'], format='%Y/%m/%d %H:%M')
+
+    # Ersetze das Dezimaltrennzeichen für numerische Spalten mit deutschem Komma
+    numeric_columns = df.select_dtypes(include=['float64', 'int64']).columns
+    df[numeric_columns] = df[numeric_columns].applymap(lambda x: f"{x:.2f}".replace('.', ','))
+
+    return df
+
+# Funktion zur Umwandlung in Excel mit deutschem Format
+def to_excel(df):
+    output = BytesIO()
+    writer = pd.ExcelWriter(output, engine='xlsxwriter')
+    df.to_excel(writer, index=False, sheet_name='Daten')
+
+    # Automatische Formatierung anpassen
+    workbook = writer.book
+    worksheet = writer.sheets['Daten']
+    
+    # Format für Datum und Zeit
+    date_format = workbook.add_format({'num_format': 'dd/mm/yyyy hh:mm'})
+    worksheet.set_column('A:A', 20, date_format)
+
+    # Speichern und Rückgabe des Inhalts
+    writer.save()
+    output.seek(0)
+    return output
+
 # Titel des Dashboards
-st.title("Spezielle CSV-Datei Hochladen und Bearbeiten")
+st.title("CSV-Datei Hochladen und in deutsches Excel-Format umwandeln")
 
 # Upload der CSV-Datei
 uploaded_file = st.file_uploader("Wähle eine CSV-Datei aus", type=["csv"])
@@ -38,49 +69,21 @@ if uploaded_file is not None:
         # Bereinigung der Spaltennamen
         df.columns = clean_column_names(df.columns)
         
+        # Konvertiere in deutsches Format (Datum/Zeit und Dezimaltrennzeichen)
+        df_german_format = convert_to_german_format(df)
+        
         # Anzeige der bereinigten Rohdaten
-        st.subheader("Bereinigte Rohdaten")
-        st.write(df)
+        st.subheader("Bereinigte und formatierte Rohdaten")
+        st.write(df_german_format)
         
-        # Möglichkeit zur Bearbeitung der Daten
-        st.subheader("Daten bearbeiten und anpassen")
-        
-        # Dropdown-Menü zur Auswahl der Spalten, die bearbeitet werden sollen
-        selected_columns = st.multiselect("Wähle die Spalten aus, die du anzeigen oder bearbeiten möchtest", df.columns)
-        
-        if selected_columns:
-            st.write(df[selected_columns])
-        
-        # Weitere Bearbeitungsoptionen, z.B. Spalten umbenennen oder Filtern nach bestimmten Kriterien
-        st.subheader("Datenvereinheitlichung")
-        
-        # Beispiel: Spalten umbenennen
-        new_column_name = st.text_input("Gib einen neuen Spaltennamen ein", "")
-        column_to_rename = st.selectbox("Wähle die Spalte, die du umbenennen möchtest", df.columns)
-        
-        if st.button("Spalte umbenennen"):
-            df = df.rename(columns={column_to_rename: new_column_name})
-            st.write("Aktualisierte Daten mit umbenannter Spalte:")
-            st.write(df)
-
-        # Beispiel: Filter auf bestimmte Werte anwenden
-        st.subheader("Daten filtern")
-        column_to_filter = st.selectbox("Wähle die Spalte zum Filtern", df.columns)
-        filter_value = st.text_input("Gib den Filterwert ein")
-        
-        if st.button("Anwenden"):
-            filtered_df = df[df[column_to_filter].astype(str).str.contains(filter_value, na=False)]
-            st.write(f"Gefilterte Daten basierend auf {filter_value}:")
-            st.write(filtered_df)
-        
-        # Möglichkeit, die angepassten Daten als CSV mit Semikolon als Trennzeichen herunterzuladen
-        st.subheader("Herunterladen der angepassten Daten (Semikolon-getrennt)")
-        csv = df.to_csv(index=False, sep=';').encode('utf-8')
+        # Möglichkeit, die angepassten Daten als Excel-Datei herunterzuladen
+        st.subheader("Herunterladen der angepassten Excel-Daten")
+        excel = to_excel(df_german_format)
         st.download_button(
-            label="CSV-Datei herunterladen",
-            data=csv,
-            file_name='bearbeitete_daten_semikolon.csv',
-            mime='text/csv',
+            label="Excel-Datei herunterladen",
+            data=excel,
+            file_name='bereinigte_daten_de.xlsx',
+            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         )
     except Exception as e:
         st.error(f"Es gab ein Problem beim Lesen der Datei: {e}")
