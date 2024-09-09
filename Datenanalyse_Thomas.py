@@ -44,8 +44,10 @@ def to_excel(df):
     date_format = workbook.add_format({'num_format': 'dd/mm/yyyy hh:mm'})
     worksheet.set_column('A:A', 20, date_format)
 
-    # Speichern und Rückgabe des Inhalts
-    writer.save()
+    # Workbook schließen, um die Datei zu speichern
+    writer.close()
+
+    # Setze den Output-Puffer zurück, um die Datei zum Download bereitzustellen
     output.seek(0)
     return output
 
